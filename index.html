@@ -1,0 +1,55 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tabelline Magiche - Impara Giocando!</title>
+    <meta name="description" content="Un gioco interattivo per bambini per imparare le tabelline in modo divertente e stimolante.">
+    <meta name="theme-color" content="#3b82f6">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --secondary: #60a5fa;
+        }
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .font-brand {
+            font-family: 'Fredoka', sans-serif;
+            font-weight: 600;
+        }
+        .bg-pattern {
+            background-color: #f0f9ff;
+            background-image:  radial-gradient(#d1e9ff 1.1px, transparent 1.1px), radial-gradient(#d1e9ff 1.1px, #f0f9ff 1.1px);
+            background-size: 44px 44px;
+            background-position: 0 0,22px 22px;
+        }
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
+  }
+}
+</script>
+</head>
+<body class="bg-pattern min-h-screen">
+    <div id="root"></div>
+</body>
+</html>
