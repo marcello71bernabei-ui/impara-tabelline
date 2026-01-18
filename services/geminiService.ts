@@ -1,57 +1,64 @@
 
+import { GoogleGenAI, Type } from "@google/genai";
 import { GeminiFeedback } from "../types";
 
-const correctMessages = [
-  { message: "Bravissimo! Hai indovinato!", emoji: "🌟" },
-  { message: "Incredibile! Sei un genio delle tabelline!", emoji: "🚀" },
-  { message: "Ottimo lavoro! Continua così!", emoji: "👏" },
-  { message: "Esatto! Sei velocissimo!", emoji: "⚡" },
-  { message: "Fantastico! La matematica per te non ha segreti!", emoji: "🎈" },
-  { message: "Super! Risposta perfetta!", emoji: "🏆" }
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+const LOCAL_FALLBACK_CORRECT = [
+  { message: "Bravissimo! Hai indovinato!", emoji: "🌟", tip: "Continua così, sei un campione!" },
+  { message: "Incredibile! Sei un genio!", emoji: "🚀", tip: "La tua mente corre veloce!" }
 ];
 
-const incorrectMessages = [
-  { message: "Non preoccuparti, sbagliando si impara!", emoji: "💪" },
-  { message: "Quasi! Prova a pensarci ancora un po'.", emoji: "🧠" },
-  { message: "Nessun problema, la prossima andrà meglio!", emoji: "🌈" },
-  { message: "Coraggio! Anche i grandi matematici sbagliano.", emoji: "⚓" },
-  { message: "Ops! Guarda bene il tabellone per aiutarti.", emoji: "🔍" }
+const LOCAL_FALLBACK_WRONG = [
+  { message: "Non preoccuparti, riprova!", emoji: "💪", tip: "Sbagliando si impara!" },
+  { message: "Quasi! Guarda bene il tabellone.", emoji: "🔍", tip: "Usa il trucco dei salti!" }
 ];
 
-const tips = [
-  "Sapevi che moltiplicare per 5 è come fare la metà e aggiungere uno zero?",
-  "Tutti i numeri moltiplicati per 1 rimangono uguali!",
-  "Per la tabellina del 9, la somma delle cifre del risultato fa sempre 9!",
-  "I numeri moltiplicati per 0 diventano sempre... ZERO!",
-  "La tabellina del 2 è come contare saltando un numero: 2, 4, 6, 8...",
-  "Moltiplicare per 10 è facilissimo: basta aggiungere uno 0 alla fine!"
-];
-
-/**
- * Fornisce feedback locale senza chiamare API esterne per evitare errori di quota.
- */
 export const getGeminiFeedback = async (
   a: number,
   b: number,
   isCorrect: boolean,
   userInput: number | string
 ): Promise<GeminiFeedback> => {
-  // Simuliamo un brevissimo caricamento per mantenere l'effetto "pensante"
-  await new Promise(resolve => setTimeout(resolve, 600));
+  try {
+    const prompt = isCorrect 
+      ? `Un bambino ha risposto correttamente ${userInput} a ${a}x${b}. Fornisci un breve complimento magico e un piccolo fatto divertente o trucco sulla tabellina del ${a} o ${b}.`
+      : `Un bambino ha risposto ${userInput} a ${a}x${b}, ma la risposta corretta è ${a * b}. Fornisci un feedback incoraggiante, non giudicante, e un piccolo suggerimento per ricordare questa specifica tabellina senza essere troppo tecnico.`;
 
-  const source = isCorrect ? correctMessages : incorrectMessages;
-  const randomMsg = source[Math.floor(Math.random() * source.length)];
-  const randomTip = Math.random() > 0.4 ? tips[Math.floor(Math.random() * tips.length)] : undefined;
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            message: { type: Type.STRING, description: "Il messaggio di feedback" },
+            emoji: { type: Type.STRING, description: "Un emoji a tema" },
+            tip: { type: Type.STRING, description: "Un trucco o consiglio matematico" }
+          },
+          required: ["message", "emoji", "tip"]
+        },
+        systemInstruction: "Sei un mago simpatico e incoraggiante di nome Merlino che aiuta i bambini di 7-10 anni a imparare le tabelline. Parla sempre in italiano, sii breve e molto caloroso."
+      }
+    });
 
-  // Se è sbagliato e conosciamo il risultato, aggiungiamo una nota tecnica
-  let message = randomMsg.message;
-  if (!isCorrect && userInput !== "Tempo scaduto") {
-    message = `${userInput} non è corretto. Ricorda che ${a} × ${b} fa proprio ${a * b}. ${message}`;
+    const result = JSON.parse(response.text || "{}");
+    return {
+      message: result.message || (isCorrect ? "Esatto!" : "Riprova!"),
+      emoji: result.emoji || (isCorrect ? "✨" : "🧙‍♂️"),
+      tip: result.tip || ""
+    };
+  } catch (error) {
+    console.error("Gemini API Error:", error);
+    // Fallback locale in caso di errore API
+    const pool = isCorrect ? LOCAL_FALLBACK_CORRECT : LOCAL_FALLBACK_WRONG;
+    const item = pool[Math.floor(Math.random() * pool.length)];
+    return {
+      ...item,
+      message: !isCorrect && userInput !== "Tempo scaduto" 
+        ? `${userInput} non è corretto. ${a}×${b} fa ${a*b}. ${item.message}` 
+        : item.message
+    };
   }
-
-  return {
-    message: message,
-    emoji: randomMsg.emoji,
-    tip: randomTip
-  };
 };

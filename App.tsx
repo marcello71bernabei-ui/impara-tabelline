@@ -46,7 +46,6 @@ const App: React.FC = () => {
   const questionPoolRef = useRef<Question[]>([]);
   const timerRef = useRef<number | null>(null);
 
-  // Load persistence
   useEffect(() => {
     const savedHighScore = localStorage.getItem('tabelline_highscore');
     if (savedHighScore) setHighScore(parseInt(savedHighScore));
@@ -55,7 +54,6 @@ const App: React.FC = () => {
     if (savedTimers) setCustomTimers(JSON.parse(savedTimers));
   }, []);
 
-  // Save high score
   useEffect(() => {
     if (score > highScore) {
       setHighScore(score);
@@ -95,12 +93,18 @@ const App: React.FC = () => {
     const activeDiff = targetDifficulty || difficulty;
     
     if (questionPoolRef.current.length === 0) {
-      if (solvedCells.size > 0 && solvedCells.size === Math.pow(DEFAULT_DIFFICULTY_CONFIG[activeDiff].maxRange, 2)) {
+      const maxCells = Math.pow(DEFAULT_DIFFICULTY_CONFIG[activeDiff].maxRange, 2);
+      if (solvedCells.size >= maxCells) {
         setGameState('gameover');
         setTimerActive(false);
         return;
       }
-      questionPoolRef.current = generatePool(activeDiff);
+      questionPoolRef.current = generatePool(activeDiff).filter(q => !solvedCells.has(`${q.a}x${q.b}`));
+      if (questionPoolRef.current.length === 0) {
+        setGameState('gameover');
+        setTimerActive(false);
+        return;
+      }
     }
 
     const nextQ = questionPoolRef.current.pop() || null;
@@ -112,7 +116,7 @@ const App: React.FC = () => {
     setIsHintActive(false);
     setTimeLeft(customTimers[activeDiff]);
     setTimerActive(true);
-  }, [difficulty, customTimers, solvedCells.size]);
+  }, [difficulty, customTimers, solvedCells]);
 
   const startGame = () => {
     soundService.playClick();
@@ -122,6 +126,8 @@ const App: React.FC = () => {
     setCorrectCount(0);
     setWrongCount(0);
     setScore(0);
+    setStreak(0);
+    questionPoolRef.current = generatePool(difficulty);
     extractNewQuestion(difficulty);
   };
 
@@ -143,6 +149,7 @@ const App: React.FC = () => {
     setTableStats({});
     questionPoolRef.current = generatePool(newDiff);
     setTimeLeft(customTimers[newDiff]);
+    if (gameState === 'playing') extractNewQuestion(newDiff);
   };
 
   const handleTimerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -181,7 +188,7 @@ const App: React.FC = () => {
     setFeedback(fb);
     setIsLoading(false);
 
-    setTimeout(() => extractNewQuestion(), 3000);
+    setTimeout(() => extractNewQuestion(), 4000);
   };
 
   const handleSubmit = async () => {
@@ -208,11 +215,11 @@ const App: React.FC = () => {
     }
 
     setIsLoading(true);
-    const fb = await getGeminiFeedback(currentQuestion.a, currentQuestion.b, isCorrect, userInput);
+    const fb = await getGeminiFeedback(currentQuestion.a, currentQuestion.b, isCorrect, numericInput);
     setFeedback(fb);
     setIsLoading(false);
 
-    setTimeout(() => extractNewQuestion(), isCorrect ? 2500 : 3500);
+    setTimeout(() => extractNewQuestion(), isCorrect ? 3000 : 5000);
   };
 
   if (gameState === 'landing') {
@@ -221,12 +228,12 @@ const App: React.FC = () => {
         <div className="bg-white p-10 rounded-[3rem] shadow-2xl border-8 border-blue-100 max-w-lg w-full transform transition-all hover:scale-[1.02]">
           <div className="text-7xl mb-6 animate-float">🎩</div>
           <h1 className="text-4xl font-brand text-blue-600 mb-4">Tabelline Magiche</h1>
-          <p className="text-gray-600 mb-8 text-lg">Sei pronto a sfidare i numeri e diventare un mago della matematica?</p>
+          <p className="text-gray-600 mb-8 text-lg">Pronto per un po' di magia matematica? Entra nel regno di Merlino!</p>
           <button 
             onClick={startGame}
             className="w-full py-5 bg-blue-500 hover:bg-blue-600 text-white font-brand text-2xl rounded-2xl shadow-xl shadow-blue-200 transition-all active:scale-95"
           >
-            GIOCA ORA! 🚀
+            INIZIA L'AVVENTURA 🚀
           </button>
           <div className="mt-8 pt-8 border-t border-gray-100 flex justify-around text-sm text-gray-400 font-semibold">
             <div>🏆 Record: {highScore}</div>
@@ -238,70 +245,97 @@ const App: React.FC = () => {
   }
 
   if (gameState === 'gameover') {
-    // Fix: Explicitly cast entries to [string, TableStat][] to fix 'unknown' type errors on line 260/261
     const sortedStats = (Object.entries(tableStats) as [string, TableStat][]).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-6 text-center">
-        <div className="bg-white p-6 md:p-10 rounded-[3rem] shadow-2xl border-8 border-green-100 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="text-6xl mb-4">🎉</div>
-          <h1 className="text-3xl md:text-4xl font-brand text-green-600 mb-2">Completato!</h1>
-          <p className="text-gray-600 mb-6 italic">Hai svelato tutti i segreti di questa tabella!</p>
+        <div className="bg-white p-6 md:p-10 rounded-[3rem] shadow-2xl border-8 border-green-100 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="text-6xl mb-4 animate-bounce">🏆</div>
+          <h1 className="text-3xl md:text-4xl font-brand text-green-600 mb-2">Sei un Campione!</h1>
+          <p className="text-gray-600 mb-6 italic">Hai conquistato tutta la tabella!</p>
           
           <div className="grid grid-cols-3 gap-3 mb-8">
-            <div className="bg-green-50 p-3 rounded-2xl text-green-700">
-              <div className="text-xl md:text-2xl font-brand">{correctCount}</div>
-              <div className="text-[10px] uppercase font-bold">Giuste</div>
+            <div className="bg-green-50 p-4 rounded-3xl text-green-700 shadow-sm border border-green-100">
+              <div className="text-2xl md:text-3xl font-brand">{correctCount}</div>
+              <div className="text-[10px] uppercase font-black tracking-wider">Risposte Corrette</div>
             </div>
-            <div className="bg-red-50 p-3 rounded-2xl text-red-700">
-              <div className="text-xl md:text-2xl font-brand">{wrongCount}</div>
-              <div className="text-[10px] uppercase font-bold">Sbagliate</div>
+            <div className="bg-red-50 p-4 rounded-3xl text-red-700 shadow-sm border border-red-100">
+              <div className="text-2xl md:text-3xl font-brand">{wrongCount}</div>
+              <div className="text-[10px] uppercase font-black tracking-wider">Risposte Sbagliate</div>
             </div>
-            <div className="bg-yellow-50 p-3 rounded-2xl text-yellow-700">
-              <div className="text-xl md:text-2xl font-brand">{score}</div>
-              <div className="text-[10px] uppercase font-bold">Punti</div>
+            <div className="bg-yellow-50 p-4 rounded-3xl text-yellow-700 shadow-sm border border-yellow-100">
+              <div className="text-2xl md:text-3xl font-brand">{score}</div>
+              <div className="text-[10px] uppercase font-black tracking-wider">Punti Totali</div>
             </div>
           </div>
 
           <div className="mb-8 text-left">
-            <h3 className="font-brand text-blue-600 mb-4 text-center border-b pb-2">Analisi per Tabellina 📊</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <h3 className="font-brand text-blue-600 mb-6 text-center border-b pb-4 text-xl">Analisi Dettagliata per Tabellina 📊</h3>
+            <div className="grid grid-cols-1 gap-4">
               {sortedStats.map(([num, stat]) => {
-                const percentage = Math.round((stat.correct / stat.total) * 100);
-                let colorClass = percentage >= 80 ? 'text-green-600' : percentage >= 50 ? 'text-orange-500' : 'text-red-500';
+                const correctPerc = Math.round((stat.correct / stat.total) * 100);
+                const wrongPerc = 100 - correctPerc;
+                const wrongCountLocal = stat.total - stat.correct;
+                
                 return (
-                  <div key={num} className="bg-gray-50 p-3 rounded-xl flex items-center justify-between border border-gray-100 shadow-sm">
-                    <span className="font-brand text-gray-700 w-12 text-center bg-white rounded-lg shadow-inner py-1">×{num}</span>
-                    <div className="flex-1 mx-3 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className={`h-full transition-all duration-1000 ${percentage >= 80 ? 'bg-green-500' : percentage >= 50 ? 'bg-orange-400' : 'bg-red-400'}`} style={{ width: `${percentage}%` }}></div>
+                  <div key={num} className="bg-white p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between border border-gray-100 shadow-sm hover:shadow-md transition-shadow gap-4">
+                    <div className="flex items-center gap-4 w-full md:w-40">
+                      <span className="font-brand text-blue-600 text-xl w-14 h-14 flex items-center justify-center bg-blue-50 rounded-2xl shrink-0">×{num}</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter">Tabellina del</span>
+                        <span className="font-brand text-gray-700 text-lg">{num}</span>
+                      </div>
                     </div>
-                    <span className={`font-bold text-sm w-12 text-right ${colorClass}`}>{percentage}%</span>
+
+                    <div className="flex-1 w-full flex flex-col gap-1.5">
+                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest px-1">
+                        <span className="text-green-600">Esatte: {correctPerc}%</span>
+                        <span className="text-red-500">Errate: {wrongPerc}%</span>
+                      </div>
+                      <div className="h-4 bg-gray-100 rounded-full overflow-hidden flex shadow-inner">
+                        <div 
+                          className="h-full bg-green-500 transition-all duration-1000 ease-out" 
+                          style={{ width: `${correctPerc}%` }}
+                        ></div>
+                        <div 
+                          className="h-full bg-red-400 transition-all duration-1000 ease-out" 
+                          style={{ width: `${wrongPerc}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-4 w-full md:w-32 justify-center md:justify-end">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-bold text-green-600">{stat.correct}</span>
+                        <span className="text-[8px] font-black uppercase text-gray-400">SI</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-bold text-red-500">{wrongCountLocal}</span>
+                        <span className="text-[8px] font-black uppercase text-gray-400">NO</span>
+                      </div>
+                      <div className="flex flex-col items-center border-l pl-4 border-gray-100">
+                        <span className="text-xs font-bold text-gray-700">{stat.total}</span>
+                        <span className="text-[8px] font-black uppercase text-gray-400">TOT</span>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-4">
             <button 
-              onClick={() => {
-                setSolvedCells(new Set());
-                setCorrectCount(0);
-                setWrongCount(0);
-                setTableStats({});
-                setScore(0);
-                setGameState('playing');
-                extractNewQuestion(difficulty);
-              }}
-              className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-brand text-xl rounded-2xl shadow-lg transition-all active:scale-95"
+              onClick={startGame} 
+              className="flex-1 py-5 bg-blue-500 hover:bg-blue-600 text-white font-brand text-xl rounded-[2rem] shadow-lg shadow-blue-100 transition-all active:scale-95"
             >
-              Rigioca questa Tabella 🔄
+              NUOVA PARTITA 🔄
             </button>
             <button 
-              onClick={() => setGameState('landing')}
-              className="w-full py-3 text-gray-400 hover:text-gray-600 font-semibold"
+              onClick={() => setGameState('landing')} 
+              className="flex-1 py-5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-brand text-xl rounded-[2rem] transition-all active:scale-95"
             >
-              Torna alla Home
+              MENU PRINCIPALE
             </button>
           </div>
         </div>
@@ -311,33 +345,37 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center">
-      {/* Navbar Premium */}
       <header className="w-full bg-white/80 backdrop-blur-md shadow-sm py-3 px-6 flex flex-col lg:flex-row justify-between items-center sticky top-0 z-50 gap-4 border-b border-gray-100">
         <div className="flex items-center gap-4">
           <button onClick={() => setGameState('landing')} className="text-2xl font-brand text-blue-600 hover:scale-105 transition-transform">🎩 Magiche</button>
-          <button 
-            onClick={() => { setSoundEnabled(!soundEnabled); soundService.playClick(); }}
-            className={`p-2 rounded-xl transition-colors ${soundEnabled ? 'text-blue-500 bg-blue-50' : 'text-gray-300 bg-gray-50'}`}
-          >
-            {soundEnabled ? '🔊' : '🔇'}
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => { setSoundEnabled(!soundEnabled); soundService.playClick(); }} 
+              className={`p-2 rounded-xl transition-colors ${soundEnabled ? 'text-blue-500 bg-blue-50' : 'text-gray-300 bg-gray-50'}`}
+              title={soundEnabled ? 'Disattiva Audio' : 'Attiva Audio'}
+            >
+              {soundEnabled ? '🔊' : '🔇'}
+            </button>
+            <button 
+              onClick={() => { if(window.confirm("Vuoi ricominciare la partita da zero?")) startGame(); }}
+              className="p-2 rounded-xl text-orange-500 bg-orange-50 hover:bg-orange-100 transition-colors"
+              title="Ricomincia Partita"
+            >
+              🔄
+            </button>
+          </div>
         </div>
         
         <div className="flex flex-col md:flex-row gap-3 items-center">
           <div className="flex bg-gray-100 p-1 rounded-xl">
             {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
-              <button
-                key={d}
-                onClick={() => changeDifficulty(d)}
-                className={`px-4 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all ${difficulty === d ? `${DEFAULT_DIFFICULTY_CONFIG[d].color} text-white shadow-sm` : 'text-gray-500 hover:bg-white/50'}`}
-              >
+              <button key={d} onClick={() => changeDifficulty(d)} className={`px-4 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-all ${difficulty === d ? `${DEFAULT_DIFFICULTY_CONFIG[d].color} text-white shadow-sm` : 'text-gray-500 hover:bg-white/50'}`}>
                 {d === 'easy' ? '1-5' : d === 'medium' ? '1-10' : '1-12'}
               </button>
             ))}
           </div>
-          
           <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-50 rounded-xl border border-blue-100">
-            <span className="text-[10px] font-bold text-blue-600 uppercase">Timer:</span>
+            <span className="text-[10px] font-bold text-blue-600 uppercase">Tempo:</span>
             <input type="range" min="3" max="60" value={customTimers[difficulty]} onChange={handleTimerChange} className="w-20 md:w-24 h-1.5 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
             <span className="text-xs font-bold text-blue-600 w-6">{customTimers[difficulty]}s</span>
           </div>
@@ -351,9 +389,7 @@ const App: React.FC = () => {
 
       <main className="max-w-6xl w-full px-4 mt-8 pb-20 flex flex-col lg:flex-row gap-8 items-start justify-center">
         <section className="flex-1 w-full flex flex-col items-center">
-          <div className="bg-blue-600 text-white px-6 py-3 rounded-t-3xl font-brand shadow-lg w-full max-w-[420px] text-center">
-            Tabellone Misterioso 🔍
-          </div>
+          <div className="bg-blue-600 text-white px-6 py-3 rounded-t-3xl font-brand shadow-lg w-full max-w-[420px] text-center">Tabellone Misterioso 🔍</div>
           <TableGrid highlighted={currentQuestion} solvedCells={solvedCells} maxRange={DEFAULT_DIFFICULTY_CONFIG[difficulty].maxRange} isHintActive={isHintActive} />
           <div className="mt-4 flex gap-6 text-sm font-bold">
             <div className="text-green-600">✅ {correctCount}</div>
@@ -379,15 +415,11 @@ const App: React.FC = () => {
                 <span className="text-blue-300 text-4xl">×</span>
                 <span>{currentQuestion?.b}</span>
                 <span className="text-blue-300 text-4xl">=</span>
-                <div className={`min-w-[80px] border-b-8 ${isError ? 'border-red-400 text-red-500 animate-shake' : 'border-blue-400 text-blue-600'}`}>{userInput || '?'}</div>
+                <div className={`min-w-[80px] border-b-8 ${isError ? 'border-red-400 text-red-500' : 'border-blue-400 text-blue-600'}`}>{userInput || '?'}</div>
               </div>
 
               <div className="flex justify-center mb-6">
-                 <button 
-                  onClick={handleHint}
-                  disabled={isHintActive || score < 5}
-                  className={`flex items-center gap-2 px-6 py-2 rounded-2xl font-brand transition-all shadow-md active:scale-95 ${isHintActive || score < 5 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-orange-100 text-orange-600 hover:bg-orange-200 border border-orange-200'}`}
-                >
+                 <button onClick={handleHint} disabled={isHintActive || score < 5 || !timerActive} className={`flex items-center gap-2 px-6 py-2 rounded-2xl font-brand transition-all shadow-md active:scale-95 ${isHintActive || score < 5 || !timerActive ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-orange-100 text-orange-600 hover:bg-orange-200 border border-orange-200'}`}>
                   <span className="text-lg">💡</span> Suggerimento (-5⭐)
                 </button>
               </div>
@@ -396,20 +428,22 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {feedback && (
-            <div className={`mt-6 p-6 rounded-3xl shadow-xl border-l-8 animate-in slide-in-from-bottom-4 duration-500 ${isError ? 'bg-red-50 border-red-400 text-red-900' : 'bg-green-50 border-green-400 text-green-900'}`}>
-              <div className="flex gap-4">
-                <span className="text-4xl">{feedback.emoji}</span>
-                <div>
-                  <h4 className="font-brand text-lg mb-1">{isError ? 'Quasi!' : 'Grande!'}</h4>
-                  <p className="text-sm opacity-90">{feedback.message}</p>
-                  {feedback.tip && <p className="mt-2 text-xs italic opacity-70">💡 {feedback.tip}</p>}
+          <div className={`mt-6 transition-all duration-500 ${feedback ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
+            {feedback && (
+              <div className={`p-6 rounded-3xl shadow-xl border-l-8 ${isError ? 'bg-red-50 border-red-400 text-red-900' : 'bg-green-50 border-green-400 text-green-900'}`}>
+                <div className="flex gap-4">
+                  <span className="text-4xl shrink-0 animate-bounce">{feedback.emoji}</span>
+                  <div>
+                    <h4 className="font-brand text-lg mb-1">{isError ? 'Quasi!' : 'Magico!'}</h4>
+                    <p className="text-sm opacity-90 leading-relaxed">{feedback.message}</p>
+                    {feedback.tip && <div className="mt-3 p-3 bg-white/60 rounded-xl text-xs italic border border-dashed border-gray-200">💡 {feedback.tip}</div>}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {isLoading && <div className="mt-6 flex justify-center gap-2"><div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div><div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div><div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.5s]"></div></div>}
+          {isLoading && <div className="mt-6 flex justify-center gap-2 py-4"><div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce"></div><div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div><div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.5s]"></div></div>}
         </section>
       </main>
     </div>
