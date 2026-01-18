@@ -38,6 +38,7 @@ const App: React.FC = () => {
   const [feedback, setFeedback] = useState<GeminiFeedback | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [isHintActive, setIsHintActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(15);
   const [timerActive, setTimerActive] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -108,6 +109,7 @@ const App: React.FC = () => {
     setUserInput('');
     setFeedback(null);
     setIsError(false);
+    setIsHintActive(false);
     setTimeLeft(customTimers[activeDiff]);
     setTimerActive(true);
   }, [difficulty, customTimers, solvedCells.size]);
@@ -121,6 +123,13 @@ const App: React.FC = () => {
     setWrongCount(0);
     setScore(0);
     extractNewQuestion(difficulty);
+  };
+
+  const handleHint = () => {
+    if (isHintActive || !timerActive || score < 5) return;
+    soundService.playClick();
+    setIsHintActive(true);
+    setScore(prev => Math.max(0, prev - 5));
   };
 
   const changeDifficulty = (newDiff: Difficulty) => {
@@ -345,7 +354,7 @@ const App: React.FC = () => {
           <div className="bg-blue-600 text-white px-6 py-3 rounded-t-3xl font-brand shadow-lg w-full max-w-[420px] text-center">
             Tabellone Misterioso 🔍
           </div>
-          <TableGrid highlighted={currentQuestion} solvedCells={solvedCells} maxRange={DEFAULT_DIFFICULTY_CONFIG[difficulty].maxRange} />
+          <TableGrid highlighted={currentQuestion} solvedCells={solvedCells} maxRange={DEFAULT_DIFFICULTY_CONFIG[difficulty].maxRange} isHintActive={isHintActive} />
           <div className="mt-4 flex gap-6 text-sm font-bold">
             <div className="text-green-600">✅ {correctCount}</div>
             <div className="text-red-500">❌ {wrongCount}</div>
@@ -365,12 +374,22 @@ const App: React.FC = () => {
                 <span className={`font-brand text-2xl ${timeLeft <= 3 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`}>{timeLeft}s</span>
               </div>
               
-              <div className="flex items-center justify-center gap-4 text-6xl md:text-7xl font-brand text-gray-800 mb-10">
+              <div className="flex items-center justify-center gap-4 text-6xl md:text-7xl font-brand text-gray-800 mb-6">
                 <span>{currentQuestion?.a}</span>
                 <span className="text-blue-300 text-4xl">×</span>
                 <span>{currentQuestion?.b}</span>
                 <span className="text-blue-300 text-4xl">=</span>
                 <div className={`min-w-[80px] border-b-8 ${isError ? 'border-red-400 text-red-500 animate-shake' : 'border-blue-400 text-blue-600'}`}>{userInput || '?'}</div>
+              </div>
+
+              <div className="flex justify-center mb-6">
+                 <button 
+                  onClick={handleHint}
+                  disabled={isHintActive || score < 5}
+                  className={`flex items-center gap-2 px-6 py-2 rounded-2xl font-brand transition-all shadow-md active:scale-95 ${isHintActive || score < 5 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-orange-100 text-orange-600 hover:bg-orange-200 border border-orange-200'}`}
+                >
+                  <span className="text-lg">💡</span> Suggerimento (-5⭐)
+                </button>
               </div>
 
               <Keypad onPress={(v) => { if(userInput.length < 3 && timerActive) { soundService.playClick(); setUserInput(prev => prev + v); } }} onClear={() => { soundService.playClick(); setUserInput(''); }} onSubmit={handleSubmit} />
