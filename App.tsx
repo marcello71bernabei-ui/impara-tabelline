@@ -12,6 +12,11 @@ const DEFAULT_DIFFICULTY_CONFIG = {
   hard: { maxRange: 12, timer: 10, color: 'bg-red-500', label: 'Difficile (1-12)' }
 };
 
+interface TableStat {
+  correct: number;
+  total: number;
+}
+
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<'landing' | 'playing' | 'gameover'>('landing');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
@@ -29,6 +34,7 @@ const App: React.FC = () => {
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongCount, setWrongCount] = useState(0);
   const [solvedCells, setSolvedCells] = useState<Set<string>>(new Set());
+  const [tableStats, setTableStats] = useState<Record<number, TableStat>>({});
   const [feedback, setFeedback] = useState<GeminiFeedback | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
@@ -71,6 +77,19 @@ const App: React.FC = () => {
     return newPool;
   };
 
+  const updateTableStats = (num: number, isCorrect: boolean) => {
+    setTableStats(prev => {
+      const current = prev[num] || { correct: 0, total: 0 };
+      return {
+        ...prev,
+        [num]: {
+          correct: current.correct + (isCorrect ? 1 : 0),
+          total: current.total + 1
+        }
+      };
+    });
+  };
+
   const extractNewQuestion = useCallback((targetDifficulty?: Difficulty) => {
     const activeDiff = targetDifficulty || difficulty;
     
@@ -96,6 +115,11 @@ const App: React.FC = () => {
   const startGame = () => {
     soundService.playClick();
     setGameState('playing');
+    setTableStats({});
+    setSolvedCells(new Set());
+    setCorrectCount(0);
+    setWrongCount(0);
+    setScore(0);
     extractNewQuestion(difficulty);
   };
 
@@ -107,6 +131,7 @@ const App: React.FC = () => {
     setCorrectCount(0);
     setWrongCount(0);
     setSolvedCells(new Set());
+    setTableStats({});
     questionPoolRef.current = generatePool(newDiff);
     setTimeLeft(customTimers[newDiff]);
   };
@@ -141,6 +166,7 @@ const App: React.FC = () => {
     setIsError(true);
 
     if (!currentQuestion) return;
+    updateTableStats(currentQuestion.a, false);
     setIsLoading(true);
     const fb = await getGeminiFeedback(currentQuestion.a, currentQuestion.b, false, "Tempo scaduto");
     setFeedback(fb);
@@ -155,6 +181,8 @@ const App: React.FC = () => {
     setTimerActive(false);
     const numericInput = parseInt(userInput);
     const isCorrect = numericInput === currentQuestion.result;
+
+    updateTableStats(currentQuestion.a, isCorrect);
 
     if (isCorrect) {
       soundService.playCorrect();
@@ -201,42 +229,72 @@ const App: React.FC = () => {
   }
 
   if (gameState === 'gameover') {
+    // Fix: Explicitly cast entries to [string, TableStat][] to fix 'unknown' type errors on line 260/261
+    const sortedStats = (Object.entries(tableStats) as [string, TableStat][]).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-        <div className="bg-white p-10 rounded-[3rem] shadow-2xl border-8 border-green-100 max-w-lg w-full">
-          <div className="text-7xl mb-6">🎉</div>
-          <h1 className="text-4xl font-brand text-green-600 mb-2">Completato!</h1>
-          <p className="text-gray-600 mb-6">Hai svelato tutti i segreti di questa tabella!</p>
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-6 text-center">
+        <div className="bg-white p-6 md:p-10 rounded-[3rem] shadow-2xl border-8 border-green-100 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="text-6xl mb-4">🎉</div>
+          <h1 className="text-3xl md:text-4xl font-brand text-green-600 mb-2">Completato!</h1>
+          <p className="text-gray-600 mb-6 italic">Hai svelato tutti i segreti di questa tabella!</p>
           
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="bg-green-50 p-4 rounded-2xl text-green-700">
-              <div className="text-2xl font-brand">{correctCount}</div>
-              <div className="text-xs uppercase font-bold">Giuste</div>
+          <div className="grid grid-cols-3 gap-3 mb-8">
+            <div className="bg-green-50 p-3 rounded-2xl text-green-700">
+              <div className="text-xl md:text-2xl font-brand">{correctCount}</div>
+              <div className="text-[10px] uppercase font-bold">Giuste</div>
             </div>
-            <div className="bg-red-50 p-4 rounded-2xl text-red-700">
-              <div className="text-2xl font-brand">{wrongCount}</div>
-              <div className="text-xs uppercase font-bold">Sbagliate</div>
+            <div className="bg-red-50 p-3 rounded-2xl text-red-700">
+              <div className="text-xl md:text-2xl font-brand">{wrongCount}</div>
+              <div className="text-[10px] uppercase font-bold">Sbagliate</div>
+            </div>
+            <div className="bg-yellow-50 p-3 rounded-2xl text-yellow-700">
+              <div className="text-xl md:text-2xl font-brand">{score}</div>
+              <div className="text-[10px] uppercase font-bold">Punti</div>
             </div>
           </div>
 
-          <button 
-            onClick={() => {
-              setSolvedCells(new Set());
-              setCorrectCount(0);
-              setWrongCount(0);
-              setGameState('playing');
-              extractNewQuestion(difficulty);
-            }}
-            className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-brand text-xl rounded-2xl shadow-lg transition-all"
-          >
-            Rigioca questa Tabella 🔄
-          </button>
-          <button 
-            onClick={() => setGameState('landing')}
-            className="w-full mt-3 py-3 text-gray-400 hover:text-gray-600 font-semibold"
-          >
-            Torna alla Home
-          </button>
+          <div className="mb-8 text-left">
+            <h3 className="font-brand text-blue-600 mb-4 text-center border-b pb-2">Analisi per Tabellina 📊</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {sortedStats.map(([num, stat]) => {
+                const percentage = Math.round((stat.correct / stat.total) * 100);
+                let colorClass = percentage >= 80 ? 'text-green-600' : percentage >= 50 ? 'text-orange-500' : 'text-red-500';
+                return (
+                  <div key={num} className="bg-gray-50 p-3 rounded-xl flex items-center justify-between border border-gray-100 shadow-sm">
+                    <span className="font-brand text-gray-700 w-12 text-center bg-white rounded-lg shadow-inner py-1">×{num}</span>
+                    <div className="flex-1 mx-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div className={`h-full transition-all duration-1000 ${percentage >= 80 ? 'bg-green-500' : percentage >= 50 ? 'bg-orange-400' : 'bg-red-400'}`} style={{ width: `${percentage}%` }}></div>
+                    </div>
+                    <span className={`font-bold text-sm w-12 text-right ${colorClass}`}>{percentage}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={() => {
+                setSolvedCells(new Set());
+                setCorrectCount(0);
+                setWrongCount(0);
+                setTableStats({});
+                setScore(0);
+                setGameState('playing');
+                extractNewQuestion(difficulty);
+              }}
+              className="w-full py-4 bg-green-500 hover:bg-green-600 text-white font-brand text-xl rounded-2xl shadow-lg transition-all active:scale-95"
+            >
+              Rigioca questa Tabella 🔄
+            </button>
+            <button 
+              onClick={() => setGameState('landing')}
+              className="w-full py-3 text-gray-400 hover:text-gray-600 font-semibold"
+            >
+              Torna alla Home
+            </button>
+          </div>
         </div>
       </div>
     );
